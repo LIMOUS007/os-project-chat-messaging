@@ -1,0 +1,19 @@
+# build output
+/build/
+/server
+!/server/
+/client
+!/client/
+*.o
+*.d
+*.exe
+
+# runtime data
+*.db
+*.db-wal
+*.db-shm
+
+# editor / OS noise
+.vscode/
+.DS_Store
+Thumbs.db

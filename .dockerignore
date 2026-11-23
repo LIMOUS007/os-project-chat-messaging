@@ -1,0 +1,7 @@
+build/
+server
+client
+*.db
+*.db-wal
+*.db-shm
+.git/
