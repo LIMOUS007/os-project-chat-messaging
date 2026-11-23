@@ -1,9 +1,6 @@
 # build output
 /build/
-/server
-!/server/
-/client
-!/client/
+/bin/
 *.o
 *.d
 *.exe

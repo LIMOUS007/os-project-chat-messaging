@@ -1,6 +1,5 @@
 build/
-server
-client
+bin/
 *.db
 *.db-wal
 *.db-shm
