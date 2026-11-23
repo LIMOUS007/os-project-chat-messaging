@@ -1,0 +1,19 @@
+# docker-compose.yml (SPEC §10)
+#
+#   docker compose up --build server     # terminal 1: the server
+#   docker compose run --rm client       # terminals 2..6: one client each
+#   > connect server alice               # "server" = the service name on the compose network
+services:
+  server:
+    build: .
+    ports: ["5555:5555"]
+    volumes: ["chatdata:/data"]     # chat.db survives container restarts
+    stop_grace_period: 5s
+  client:
+    build: .
+    command: ["./client"]
+    stdin_open: true
+    tty: true
+    profiles: ["client"]            # not started by "up"; use "compose run"
+volumes:
+  chatdata:

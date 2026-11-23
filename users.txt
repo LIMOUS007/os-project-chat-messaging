@@ -1,6 +1,9 @@
+# users.txt — the only usernames that can log in (one per line).
+# Blank lines and lines starting with # are ignored.
 alice
 bob
 carol
 dave
 eve
 frank
+grace
