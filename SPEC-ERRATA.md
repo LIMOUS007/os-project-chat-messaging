@@ -4,8 +4,16 @@
 the spec more precise or has to depart from it. The contract is **SPEC.md plus this file**.
 Each entry names the spec section it affects and says why the change is needed.
 
-> **Team approval:** these clarifications came out of the design review. Every member should
-> read them and sign off before the design document is submitted.
+> **Status: NOT YET APPROVED.** These clarifications came out of the design review. Until
+> every member signs below, they are proposals, not part of the contract. The final design
+> document must describe the behaviour recorded here.
+
+| Member | Name | Read all of E1–E13 | Approved (date) | Objections / notes |
+|---|---|---|---|---|
+| A | | ☐ | | |
+| B | | ☐ | | |
+| C | | ☐ | | |
+| D | | ☐ | | |
 
 ---
 
