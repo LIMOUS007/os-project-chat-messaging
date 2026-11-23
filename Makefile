@@ -111,12 +111,16 @@ stress: all
 	$(MAKE) BUILD=build/rel bins
 	bash tests/stress/run.sh build/rel
 
+# TSan needs a fixed memory layout; newer kernels (e.g. WSL2) break it unless
+# address-space randomisation is turned off for the test run.
+NO_ASLR = setarch $$(uname -m) -R
+
 tsan:
 	$(MAKE) BUILD=build/tsan EXTRA="-fsanitize=thread -O1" bins build/tsan/tests/test_jobqueue \
 	        build/tsan/tests/test_session
-	TSAN_OPTIONS="halt_on_error=1" build/tsan/tests/test_jobqueue
-	TSAN_OPTIONS="halt_on_error=1" build/tsan/tests/test_session
-	bash tests/stress/run.sh build/tsan
+	$(NO_ASLR) build/tsan/tests/test_jobqueue
+	$(NO_ASLR) build/tsan/tests/test_session
+	$(NO_ASLR) bash tests/stress/run.sh build/tsan
 
 clean:
 	rm -rf build bin
