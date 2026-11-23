@@ -75,8 +75,10 @@ db_status_t db_store_dm(const char *sender, const char *recipient, const char *b
  * groups the user is currently a member of). */
 db_status_t db_count_pending(const char *user, time_t now, int *count, db_err_t *err);
 
-/* Pending, unexpired DMs and pending group messages for user, in id order. */
-db_status_t db_pending_for(const char *user, time_t now, db_messages_t *out, db_err_t *err);
+/* Pending, unexpired DMs and pending group messages for user, in id order:
+ * at most `limit` of them, all with id > after_id (login replay is paged). */
+db_status_t db_pending_for(const char *user, time_t now, uint64_t after_id, int limit,
+                           db_messages_t *out, db_err_t *err);
 
 /* ACK: pending -> delivered, for the DM or the group delivery row of user.
  * Idempotent. */

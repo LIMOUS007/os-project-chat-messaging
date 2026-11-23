@@ -95,6 +95,15 @@ activate_result_t session_try_activate(session_handle_t h, const char *username,
  * the actual close. Locks: sessions_mutex. */
 void session_request_close(session_handle_t h, close_req_t kind);
 
+/* Login replay paging (handlers.c): remember that more pending messages
+ * remain after message id after_id. Locks: sessions_mutex. */
+void session_set_replay(session_handle_t h, uint64_t after_id);
+
+/* If a replay page is still owed AND the outbuf holds less than max_pending
+ * bytes, clears the flag, returns true and gives the id to continue after.
+ * Locks: sessions_mutex. */
+bool session_take_replay(session_handle_t h, size_t max_pending, uint64_t *after_id);
+
 /* Clears busy after a worker finished h's job (only if h is still current).
  * Locks: sessions_mutex. */
 void session_job_done(session_handle_t h);

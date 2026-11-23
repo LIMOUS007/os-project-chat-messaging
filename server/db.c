@@ -390,14 +390,18 @@ db_status_t db_count_pending(const char *user, time_t now, int *count, db_err_t 
     return status;
 }
 
-db_status_t db_pending_for(const char *user, time_t now, db_messages_t *out, db_err_t *err)
+db_status_t db_pending_for(const char *user, time_t now, uint64_t after_id, int limit,
+                           db_messages_t *out, db_err_t *err)
 {
     pthread_mutex_lock(&db_mutex);
     db_status_t status = DB_ERROR;
-    sqlite3_stmt *st = prepare(PENDING_SQL " ORDER BY 1", err);
+    sqlite3_stmt *st = prepare("SELECT * FROM (" PENDING_SQL ") WHERE id > ?3 ORDER BY id LIMIT ?4",
+                               err);
     if (st != NULL) {
         bind_text(st, 1, user);
         sqlite3_bind_int64(st, 2, now);
+        sqlite3_bind_int64(st, 3, (int64_t)after_id);
+        sqlite3_bind_int(st, 4, limit);
         status = collect_messages(st, out, err);
     }
     pthread_mutex_unlock(&db_mutex);

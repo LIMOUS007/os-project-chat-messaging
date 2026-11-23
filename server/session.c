@@ -17,6 +17,8 @@ typedef struct {
     uint8_t        *outbuf;       /* encoded frames waiting to be written          */
     size_t          out_used;     /* bytes in outbuf                               */
     size_t          out_cap;      /* allocated size of outbuf                      */
+    bool            replay_more;  /* login replay not finished (paged, see handlers.c) */
+    uint64_t        replay_after; /* next replay page starts after this message id */
 } session_t;
 
 /* sessions_mutex: the event loop, the 4 workers and the expiry thread all read
@@ -141,6 +143,32 @@ void session_request_close(session_handle_t h, close_req_t kind)
     pthread_mutex_unlock(&sessions_mutex);
 }
 
+void session_set_replay(session_handle_t h, uint64_t after_id)
+{
+    pthread_mutex_lock(&sessions_mutex);
+    if (handle_is_current(h)) {
+        sessions[h.slot].replay_more = true;
+        sessions[h.slot].replay_after = after_id;
+    }
+    pthread_mutex_unlock(&sessions_mutex);
+}
+
+bool session_take_replay(session_handle_t h, size_t max_pending, uint64_t *after_id)
+{
+    bool take = false;
+    pthread_mutex_lock(&sessions_mutex);
+    if (handle_is_current(h)) {
+        session_t *s = &sessions[h.slot];
+        if (s->replay_more && s->out_used < max_pending) {
+            s->replay_more = false;
+            *after_id = s->replay_after;
+            take = true;
+        }
+    }
+    pthread_mutex_unlock(&sessions_mutex);
+    return take;
+}
+
 void session_job_done(session_handle_t h)
 {
     pthread_mutex_lock(&sessions_mutex);
@@ -179,6 +207,7 @@ bool session_alloc(session_handle_t *out)
             s->busy = false;
             s->close_req = CLOSE_NONE;
             s->out_used = 0;
+            s->replay_more = false;
             out->slot = (uint32_t)i;
             out->gen = s->gen;
             ok = true;

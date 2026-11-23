@@ -32,9 +32,16 @@ static void test_dm_delivery(void)
 
     CHECK_EQ(pending_count("bob", now), 2);
     db_messages_t list = {0};
-    CHECK_EQ(db_pending_for("bob", now, &list, &err), DB_OK);
+    CHECK_EQ(db_pending_for("bob", now, 0, 1000, &list, &err), DB_OK);
     CHECK_EQ(list.count, 2);
     CHECK(list.count == 2 && list.items[0].id == id1 && list.items[1].id == id3);
+    db_messages_free(&list);
+    /* paging: a limit, and a cursor (only ids after the last one sent) */
+    db_pending_for("bob", now, 0, 1, &list, &err);
+    CHECK(list.count == 1 && list.items[0].id == id1);
+    db_messages_free(&list);
+    db_pending_for("bob", now, id1, 1000, &list, &err);
+    CHECK(list.count == 1 && list.items[0].id == id3);
     db_messages_free(&list);
 
     /* ACK -> delivered, twice is harmless; someone else's ACK changes nothing */
@@ -161,7 +168,7 @@ static void test_groups(void)
     CHECK(!dissolved);
     db_names_free(&others);
     CHECK_EQ(pending_count("carol", now), 0);
-    db_pending_for("carol", now, &list, &err);
+    db_pending_for("carol", now, 0, 1000, &list, &err);
     CHECK_EQ(list.count, 0);
     db_messages_free(&list);
     CHECK_EQ(db_group_leave("#os", "carol", &dissolved, &others, &err), DB_NOT_MEMBER);

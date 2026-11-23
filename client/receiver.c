@@ -206,17 +206,24 @@ static const char *status_word(uint8_t status)
     }
 }
 
-static void print_history(const cmd_t *cmd)
+/* total = the count in HISTORY_END: all matching messages. The server sends
+ * only the newest ones that fit its output buffer, so total can be larger. */
+static void print_history(const cmd_t *cmd, uint32_t total)
 {
     bool group = is_group_name(cmd->name);
     if (history_count == 0) {
         ui_print("No messages %s %s.", group ? "in" : "with", cmd->name);
         return;
     }
-    if (group)
-        ui_print("--- Messages in %s (%d) ---", cmd->name, history_count);
+    char count[64];
+    if ((uint32_t)history_count < total)
+        snprintf(count, sizeof count, "showing last %d of %u", history_count, total);
     else
-        ui_print("--- Conversation with %s (%d) ---", cmd->name, history_count);
+        snprintf(count, sizeof count, "%d", history_count);
+    if (group)
+        ui_print("--- Messages in %s (%s) ---", cmd->name, count);
+    else
+        ui_print("--- Conversation with %s (%s) ---", cmd->name, count);
 
     time_t now = time(NULL);
     for (int i = 0; i < history_count; i++) {
@@ -390,7 +397,7 @@ static char on_reply(const frame_t *f, reader_t *r)
     }
     case T_HISTORY_END:
         if (waiting)
-            print_history(&cmd);
+            print_history(&cmd, rd_u32(r));
         history_count = 0;
         break;
     case T_USER_LIST: {

@@ -107,6 +107,38 @@ static void reply_bad_payload(const job_t *job, const reader_t *r)
 
 /* ======================= LOGIN ======================= */
 
+/* Login replay is sent in pages (Rev 3.1 errata). A user who was offline for
+ * a long time may have megabytes of pending messages, far more than the
+ * 256 KiB output buffer, so sending them all at once would disconnect them
+ * at every login. Instead we send up to REPLAY_PAGE_BYTES, remember where we
+ * stopped, and send the next page when one of the client's ACKs shows the
+ * output buffer has drained (handle_ack). */
+#define REPLAY_PAGE_BYTES (64 * 1024)
+#define REPLAY_PAGE_ROWS  1000
+
+static void send_pending_page(const job_t *job, const char *user, uint64_t after_id)
+{
+    db_messages_t pending = {0};
+    db_err_t err;
+    if (db_pending_for(user, time(NULL), after_id, REPLAY_PAGE_ROWS, &pending, &err) != DB_OK) {
+        log_event("database error: %s", err.msg);
+        return;   /* still pending in the DB: delivered at the next login */
+    }
+    size_t bytes = 0;
+    int i = 0;
+    for (; i < pending.count && bytes < REPLAY_PAGE_BYTES; i++) {
+        db_message_t *m = &pending.items[i];
+        frame_builder_t fb;
+        enc_msg(&fb, m->id, m->sender, m->group, m->body, (uint64_t)m->expires_at);
+        reply(job, &fb);
+        bytes += fb.used;
+    }
+    /* Stopped early, or the row limit was hit: more may remain. */
+    if (i < pending.count || pending.count == REPLAY_PAGE_ROWS)
+        session_set_replay(job->h, pending.items[i - 1].id);
+    db_messages_free(&pending);
+}
+
 /* Login failure: send the error, then let the event loop close the
  * connection once the error has been written (Rev 3.1 errata [C]). */
 static void reject_login(const job_t *job, uint8_t code, const char *text)
@@ -159,20 +191,10 @@ static void handle_login(const job_t *job, reader_t *r)
         return;
     log_event("%s logged in (%d unread)", name, n_unread);
 
-    /* 3. Send every pending message. The session is already ACTIVE, so a
+    /* 3. Send the pending messages. The session is already ACTIVE, so a
      *    message stored from now on is also delivered live; the client
      *    removes any duplicate by message id. */
-    db_messages_t pending = {0};
-    if (db_pending_for(name, now, &pending, &err) != DB_OK) {
-        log_event("database error: %s", err.msg);
-        return;   /* still pending in the DB: delivered at the next login */
-    }
-    for (int i = 0; i < pending.count; i++) {
-        db_message_t *m = &pending.items[i];
-        enc_msg(&fb, m->id, m->sender, m->group, m->body, (uint64_t)m->expires_at);
-        reply(job, &fb);
-    }
-    db_messages_free(&pending);
+    send_pending_page(job, name, 0);
 }
 
 /* ======================= direct messages ======================= */
@@ -240,6 +262,12 @@ static void handle_ack(const job_t *job, reader_t *r)
     db_err_t err;
     if (db_ack(job->username, id, time(NULL), &err) != DB_OK)
         log_event("database error: %s", err.msg);
+
+    /* The client is reading: if a replay page is owed and the output buffer
+     * has drained, send the next page. */
+    uint64_t after_id;
+    if (session_take_replay(job->h, REPLAY_PAGE_BYTES, &after_id))
+        send_pending_page(job, job->username, after_id);
 }
 
 static void handle_mark_seen(const job_t *job, reader_t *r)
@@ -263,10 +291,27 @@ static void handle_mark_seen(const job_t *job, reader_t *r)
 
 /* ======================= history ======================= */
 
+/* History replies must fit in the 256 KiB output buffer, so only the newest
+ * messages that fit in HISTORY_BYTES are sent. HISTORY_END carries the total
+ * number of matching messages, so the client can say "showing last N of M". */
+#define HISTORY_BYTES (128 * 1024)
+
 static void send_history(const job_t *job, const db_messages_t *list)
 {
     frame_builder_t fb;
-    for (int i = 0; i < list->count; i++) {
+    /* Walk back from the newest message to find where to start. */
+    int first = list->count;
+    size_t bytes = 0;
+    while (first > 0) {
+        const db_message_t *m = &list->items[first - 1];
+        size_t size = 64 + strlen(m->sender) + strlen(m->recipient) + strlen(m->group) +
+                      strlen(m->body);   /* upper bound of the encoded frame */
+        if (bytes + size > HISTORY_BYTES)
+            break;
+        bytes += size;
+        first--;
+    }
+    for (int i = first; i < list->count; i++) {
         const db_message_t *m = &list->items[i];
         const char *to = m->group[0] != '\0' ? m->group : m->recipient;
         uint8_t status = m->group[0] != '\0' ? STATUS_NA : m->status;
