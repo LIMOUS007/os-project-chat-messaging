@@ -77,6 +77,10 @@ $(BUILD)/stress: $(OBJ)/tests/stress/stress.o $(COMMON_OBJ) $(SQLITE_OBJ)
 
 # ---------- unit tests ----------
 
+$(UNIT_BINS): | $(BUILD)/tests
+$(BUILD)/tests:
+	mkdir -p $@
+
 $(BUILD)/tests/test_protocol: $(OBJ)/tests/unit/test_protocol.o $(COMMON_OBJ)
 	$(CC) $(CFLAGS) $^ -o $@ $(LDLIBS)
 $(BUILD)/tests/test_net: $(OBJ)/tests/unit/test_net.o $(COMMON_OBJ)
